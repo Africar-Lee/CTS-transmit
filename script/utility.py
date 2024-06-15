@@ -1,121 +1,115 @@
+import pandas as pd
 import numpy as np
-import scipy.sparse as sp
-from scipy.sparse.linalg import norm
-import torch
+from typing import List
 
-def calc_gso(dir_adj, gso_type):
-    n_vertex = dir_adj.shape[0]
+# 处理数据输入的cell
 
-    if sp.issparse(dir_adj) == False:
-        dir_adj = sp.csc_matrix(dir_adj)
-    elif dir_adj.format != 'csc':
-        dir_adj = dir_adj.tocsc()
-
-    id = sp.identity(n_vertex, format='csc')
-
-    # Symmetrizing an adjacency matrix
-    adj = dir_adj + dir_adj.T.multiply(dir_adj.T > dir_adj) - dir_adj.multiply(dir_adj.T > dir_adj)
-    #adj = 0.5 * (dir_adj + dir_adj.transpose())
+def readDatas(rawDatas: List[pd.DataFrame], csvList: List[str]) -> None:
+    """将列出的所有csv文件 内容 按列表顺序存入rawDatas中"""
+    for index in range(len(csvList)):
+        tmpDf = pd.read_csv(csvList[index])
+        rawDatas.append(tmpDf)
+    return None
     
-    if gso_type == 'sym_renorm_adj' or gso_type == 'rw_renorm_adj' \
-        or gso_type == 'sym_renorm_lap' or gso_type == 'rw_renorm_lap':
-        adj = adj + id
-    
-    if gso_type == 'sym_norm_adj' or gso_type == 'sym_renorm_adj' \
-        or gso_type == 'sym_norm_lap' or gso_type == 'sym_renorm_lap':
-        row_sum = adj.sum(axis=1).A1
-        row_sum_inv_sqrt = np.power(row_sum, -0.5)
-        row_sum_inv_sqrt[np.isinf(row_sum_inv_sqrt)] = 0.
-        deg_inv_sqrt = sp.diags(row_sum_inv_sqrt, format='csc')
-        # A_{sym} = D^{-0.5} * A * D^{-0.5}
-        sym_norm_adj = deg_inv_sqrt.dot(adj).dot(deg_inv_sqrt)
+def  readDateList(dateList: List[str], csvList: List[str]) -> None:
+    """将列出的所有csv文件所属 日期 按顺序存入dateList中"""
+    for index in range(len(csvList)):
+        tmpDate = csvList[index][-8:-4]
+        dateList.append(tmpDate)
+    return None
 
-        if gso_type == 'sym_norm_lap' or gso_type == 'sym_renorm_lap':
-            sym_norm_lap = id - sym_norm_adj
-            gso = sym_norm_lap
+class cstRawCsvData:
+    def __init__(self, stationCsvLists: List[str] = [], ODCsvLists: List[str] = []) -> None:
+        """
+        初始化输入: csv文件列表，包括station的和OD的
+        而后将这些文件的内容读入相应的数据成员变量列表中，并将文件名中的日期读入日期成员变量列表中
+        """
+
+        self.rawStationDatas: List[pd.DataFrame] = []
+        self.rawODDatas: List[pd.DataFrame] = []
+
+        self.stationDateList: List[str] = []
+        self.ODDateList: List[str] = []
+
+        if stationCsvLists != None and stationCsvLists !=[]:
+            readDatas(self.rawStationDatas, stationCsvLists)
+            readDateList(self.stationDateList, stationCsvLists)
         else:
-            gso = sym_norm_adj
+            self.rawStationDatas = []
 
-    elif gso_type == 'rw_norm_adj' or gso_type == 'rw_renorm_adj' \
-        or gso_type == 'rw_norm_lap' or gso_type == 'rw_renorm_lap':
-        row_sum = np.sum(adj, axis=1).A1
-        row_sum_inv = np.power(row_sum, -1)
-        row_sum_inv[np.isinf(row_sum_inv)] = 0.
-        deg_inv = np.diag(row_sum_inv)
-        # A_{rw} = D^{-1} * A
-        rw_norm_adj = deg_inv.dot(adj)
-
-        if gso_type == 'rw_norm_lap' or gso_type == 'rw_renorm_lap':
-            rw_norm_lap = id - rw_norm_adj
-            gso = rw_norm_lap
+        if ODCsvLists != None and ODCsvLists !=[]:
+            readDatas(self.rawODDatas, ODCsvLists)
+            readDateList(self.ODDateList, ODCsvLists)
         else:
-            gso = rw_norm_adj
+            self.rawODDatas = []
 
-    else:
-        raise ValueError(f'{gso_type} is not defined.')
+        return None
 
-    return gso
-
-def calc_chebynet_gso(gso):
-    if sp.issparse(gso) == False:
-        gso = sp.csc_matrix(gso)
-    elif gso.format != 'csc':
-        gso = gso.tocsc()
-
-    id = sp.identity(gso.shape[0], format='csc')
-    # If you encounter a NotImplementedError, please update your scipy version to 1.10.1 or later.
-    eigval_max = norm(gso, 2)
-
-    # If the gso is symmetric or random walk normalized Laplacian,
-    # then the maximum eigenvalue is smaller than or equals to 2.
-    if eigval_max >= 2:
-        gso = gso - id
-    else:
-        gso = 2 * gso / eigval_max - id
-
-    return gso
-
-def cnv_sparse_mat_to_coo_tensor(sp_mat, device):
-    # convert a compressed sparse row (csr) or compressed sparse column (csc) matrix to a hybrid sparse coo tensor
-    sp_coo_mat = sp_mat.tocoo()
-    i = torch.from_numpy(np.vstack((sp_coo_mat.row, sp_coo_mat.col)))
-    v = torch.from_numpy(sp_coo_mat.data)
-    s = torch.Size(sp_coo_mat.shape)
-
-    if sp_mat.dtype == np.float32 or sp_mat.dtype == np.float64:
-        return torch.sparse_coo_tensor(indices=i, values=v, size=s, dtype=torch.float32, device=device, requires_grad=False)
-    else:
-        raise TypeError(f'ERROR: The dtype of {sp_mat} is {sp_mat.dtype}, not been applied in implemented models.')
-
-def evaluate_model(model, loss, data_iter):
-    model.eval()
-    l_sum, n = 0.0, 0
-    with torch.no_grad():
-        for x, y in data_iter:
-            y_pred = model(x).view(len(x), -1)
-            l = loss(y_pred, y)
-            l_sum += l.item() * y.shape[0]
-            n += y.shape[0]
-        mse = l_sum / n
+    def getAllStationData(self) -> pd.DataFrame:
+        if not self.rawStationDatas:
+            print("empty station data, please check it")
+            return None
         
-        return mse
+        outputDf = pd.DataFrame()
+        for df in self.rawStationDatas:
+            outputDf = pd.concat([outputDf, df])
+        return outputDf
+    
+    def getAllODData(self) -> pd.DataFrame:
+        if not self.rawODDatas:
+            print("empty OD data, please check it")
+            return None
+        outputDf = pd.DataFrame()
+        for df in self.rawODDatas:
+            outputDf = pd.concat([outputDf, df])
+        return outputDf
+    
+    def getSpecDateDf(self, date: str, sta_or_od = 1) -> pd.DataFrame:
+        """获取指定日期的数据, 以dataframe类型给出"""
+        i = 0
+        if (sta_or_od == 1):
+            # 默认获取某一天的station数据
+            for i in range(len(self.stationDateList)):
+                if date == self.stationDateList[i]:
+                    break
+                if i == (len(self.stationDateList) - 1):
+                    print("no such date info here, please check input csv list")
+                    return None
+            return self.rawStationDatas[i]
+        else:
+            # 获取某一天的OD数据
+            for i in range(len(self.ODDateList)):
+                if date == self.ODDateList[i]:
+                    break
+                if i == (len(self.ODDateList) - 1):
+                    print("no such date info here, please check input csv list")
+                    return None
+            return self.rawODDatas[i]
+        
+# 给出对dataframe的一些基本操作接口
 
-def evaluate_metric(model, data_iter, scaler):
-    model.eval()
-    with torch.no_grad():
-        mae, sum_y, mape, mse = [], [], [], []
-        for x, y in data_iter:
-            y = scaler.inverse_transform(y.cpu().numpy()).reshape(-1)
-            y_pred = scaler.inverse_transform(model(x).view(len(x), -1).cpu().numpy()).reshape(-1)
-            d = np.abs(y - y_pred)
-            mae += d.tolist()
-            sum_y += y.tolist()
-            mape += (d / y).tolist()
-            mse += (d ** 2).tolist()
-        MAE = np.array(mae).mean()
-        #MAPE = np.array(mape).mean()
-        RMSE = np.sqrt(np.array(mse).mean())
-        WMAPE = np.sum(np.array(mae)) / np.sum(np.array(sum_y))
+def getDfBySpecPeriod(startTime: str, endTime: str, originalDf: pd.DataFrame) -> pd.DataFrame:
+    """根据所给的时间段，获取dataframe中时间片位于时间段内的条目，并组成新的dataframe作为输出"""
+    startT, endT = pd.to_datetime(startTime), pd.to_datetime(endTime)
+    outputDf = pd.DataFrame(columns=originalDf.columns)
 
-        #return MAE, MAPE, RMSE
-        return MAE, RMSE, WMAPE
+    for index in range(len(originalDf)):
+        tmpStart= pd.to_datetime(originalDf.loc[:, '开始时间'].iloc[index])
+        tmpEnd = pd.to_datetime(originalDf.loc[:, '结束时间'].iloc[index])
+        if tmpStart <= startT and tmpEnd >= endT:
+            outputDf.loc[len(outputDf)] = originalDf.iloc[index]
+            outputDf.reset_index()
+
+    return outputDf
+
+def getDfByStationNameList(stationNameList: List[str], originalDf: pd.DataFrame) -> pd.DataFrame:
+    """根据所给的站名列表，获取originDf中相应站名的条目，组成新的dataframe输出"""
+    outputDf = pd.DataFrame(columns=originalDf.columns)
+
+    for index in range(len(originalDf)):
+        tmpName = str(originalDf.loc[:, '站点名'].iloc[index])
+        if tmpName in stationNameList:
+            outputDf.loc[len(outputDf)] = originalDf.iloc[index]
+            outputDf.reset_index()
+
+    return outputDf
