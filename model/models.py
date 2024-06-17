@@ -1,6 +1,6 @@
 import torch.nn.functional as F
 from torch.nn import Module
-import layers
+from model import layers
 
 class GCN(Module):
     def __init__(self, num_features, num_classes):
