@@ -5,8 +5,8 @@ from model import layers
 class GCN(Module):
     def __init__(self, num_features, num_classes):
         super(GCN, self).__init__()
-        self.conv1 = layers.GCNConvLayer(num_features, 16)
-        self.conv2 = layers.GCNConvLayer(16, num_classes)
+        self.conv1 = layers.GCNConvLayer(num_features, 24)
+        self.conv2 = layers.GCNConvLayer(24, num_classes)
 
     def forward(self, data):
         x, edge_index = data.x, data.edge_index

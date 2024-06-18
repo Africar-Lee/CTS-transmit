@@ -110,7 +110,7 @@ station_csv_file = ['station_20230519.csv',
                     'station_20230523.csv',
                     'station_20230524.csv',
                     'station_20230525.csv',]
-station_input_csv_select = [0, 1, 2]
+station_input_csv_select = range(len(station_csv_file))
 # stationList = utility.cstRawCsvData([path + station_csv_file[i] for i in station_input_csv_select])
 station = utility.get_station_for_adj(stop_for_adj, [path + station_csv_file[i] for i in station_input_csv_select])
 station = station2staion_no_line(station) # 合并分布在不同线路上的同一站点数据
@@ -175,12 +175,10 @@ num_features = 4
 num_classes = 2
 model = models.GCN(num_features, num_classes)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-criterion = torch.nn.CrossEntropyLoss()
-
-
+criterion = torch.nn.MSELoss()
 
 # start training
-duptimes = 1 # 暂定每个数据输入进模型训2次
+duptimes = 20 # 暂定每个数据输入进模型训2次
 total_input_sz = len(data_input)
 test_set_sz = 48 # 预测集大小
 train_set_sz = total_input_sz - test_set_sz
@@ -201,15 +199,15 @@ predict_in_flow = []
 predict_out_flow = []
 for piece in predict_data:
     pre_out = model(piece)
-    predict_in_flow.append(pre_out[0])
-    predict_out_flow.append(pre_out[1])
+    predict_in_flow.append(pre_out[:, 0])
+    predict_out_flow.append(pre_out[:, 1])
 
 # 按照GPT建议简单写了下性能评估
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 # 将预测值和真实值转换为 numpy 数组以便使用 sklearn 库计算评估指标
-true_in_flow = np.array([data.y[0].detach().numpy() for data in predict_data])
-true_out_flow = np.array([data.y[1].detach().numpy() for data in predict_data])
+true_in_flow = np.array([data.y[:, 0].detach().numpy() for data in predict_data])
+true_out_flow = np.array([data.y[:, 1].detach().numpy() for data in predict_data])
 predicted_in_flow = np.array([out.detach().numpy() for out in predict_in_flow])
 predicted_out_flow = np.array([out.detach().numpy() for out in predict_out_flow])
 

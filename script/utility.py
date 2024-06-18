@@ -18,6 +18,18 @@ def  readDateList(dateList: List[str], csvList: List[str]) -> None:
         dateList.append(tmpDate)
     return None
 
+def get_rem_sta_list(stop_for_adj: pd.DataFrame, csv_list: list[str]) -> list[str]:
+    tmp_df = pd.read_csv(csv_list[0])    # 获取列表中首个文件的数据
+
+    remain_staion_list = [] # 缺失的站点名列表
+    for station_name in list(stop_for_adj['站点名']):
+        if not station_name in list(tmp_df['站点名']):
+            remain_staion_list.append(station_name)
+
+    print('the length of remain_staion_list is ', len(remain_staion_list))
+
+    return remain_staion_list
+
 def get_rem_sta_info(origin_df: pd.DataFrame, rem_sta_list: list[str]) -> pd.DataFrame:
     """ 填补单个csv文件中缺失站点的数据 """
     date_str = origin_df.loc[0, '日期'] # 日期与文件中其他所有数据保持一致
@@ -45,14 +57,8 @@ def get_rem_sta_info(origin_df: pd.DataFrame, rem_sta_list: list[str]) -> pd.Dat
 
 def get_station_for_adj(stop_for_adj: pd.DataFrame, csv_list: list[str]) -> pd.DataFrame:
     """ 输入邻接矩阵中所有的站点名以及要读入的csv文件名列表， 创建station的dataframe """
-    tmp_df = pd.read_csv(csv_list[0])    # 获取列表中首个文件的数据
-
     # 添加文件数据中缺失的站点数据，目前方案为全部赋值为0
-    remain_staion_list = [] # 缺失的站点名列表
-    for station_name in list(stop_for_adj['站点名']):
-        if not station_name in list(tmp_df['站点名']):
-            remain_staion_list.append(station_name)
-    print('remain_staion_list is ', len(remain_staion_list))
+    remain_staion_list = get_rem_sta_list(stop_for_adj, csv_list) # 缺失的站点名列表
 
     output_df_list = []
     for csv_file in csv_list:
