@@ -185,9 +185,9 @@ test_set_sz = 48 # 预测集大小
 train_set_sz = total_input_sz - test_set_sz
 for epoch in range(duptimes * train_set_sz):
     optimizer.zero_grad()  # 清除梯度
-    out1, out2 = model(data_input[epoch % train_set_sz])  # 前向传播
-    loss1 = criterion(out1, data_input[epoch % train_set_sz].y[:, 0])  # 计算损失
-    loss2 = criterion(out2, data_input[epoch % train_set_sz].y[:, 1])
+    out_y = model(data_input[epoch % train_set_sz])  # 前向传播
+    loss1 = criterion(out_y[0], data_input[epoch % train_set_sz].y[:, 0])  # 计算损失
+    loss2 = criterion(out_y[1], data_input[epoch % train_set_sz].y[:, 1])
     loss = loss1 + loss2  # 加权求和
     loss.backward()  # 反向传播
     optimizer.step()  # 更新参数

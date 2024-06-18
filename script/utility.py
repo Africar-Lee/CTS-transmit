@@ -21,7 +21,7 @@ def  readDateList(dateList: List[str], csvList: List[str]) -> None:
 def get_rem_sta_info(origin_df: pd.DataFrame, rem_sta_list: list[str]) -> pd.DataFrame:
     """ 填补单个csv文件中缺失站点的数据 """
     date_str = origin_df.loc[0, '日期'] # 日期与文件中其他所有数据保持一致
-    line_str = '' # 线路名不纳入训练，初始化为空字符串
+    line_str = 'aaa' # 线路名不纳入训练，初始化为aaa
     outflow = type(origin_df.loc[0, '进站量'])(0)
     inflow = type(origin_df.loc[0, '进站量'])(0)
     start_time_enum = list(origin_df['开始时间'].unique())
