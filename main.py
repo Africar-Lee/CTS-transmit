@@ -181,13 +181,14 @@ criterion = torch.nn.CrossEntropyLoss()
 
 # start training
 duptimes = 1 # 暂定每个数据输入进模型训2次
+total_input_sz = len(data_input)
 test_set_sz = 48 # 预测集大小
 train_set_sz = total_input_sz - test_set_sz
 for epoch in range(duptimes * train_set_sz):
     optimizer.zero_grad()  # 清除梯度
     out_y = model(data_input[epoch % train_set_sz])  # 前向传播
-    loss1 = criterion(out_y[0], data_input[epoch % train_set_sz].y[:, 0])  # 计算损失
-    loss2 = criterion(out_y[1], data_input[epoch % train_set_sz].y[:, 1])
+    loss1 = criterion(out_y[0], data_input[epoch % train_set_sz].y[0])  # 计算损失
+    loss2 = criterion(out_y[1], data_input[epoch % train_set_sz].y[1])
     loss = loss1 + loss2  # 加权求和
     loss.backward()  # 反向传播
     optimizer.step()  # 更新参数
@@ -199,8 +200,25 @@ predict_data: List[Data] = data_input[train_set_sz:]
 predict_in_flow = []
 predict_out_flow = []
 for piece in predict_data:
-    pre_out1, pre_out2 = model(piece)
-    predict_in_flow.append(pre_out1)
-    predict_out_flow.append(pre_out2)
+    pre_out = model(piece)
+    predict_in_flow.append(pre_out[0])
+    predict_out_flow.append(pre_out[1])
 
-print(predict_in_flow[0])
+# 按照GPT建议简单写了下性能评估
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+
+# 将预测值和真实值转换为 numpy 数组以便使用 sklearn 库计算评估指标
+true_in_flow = np.array([data.y[0].detach().numpy() for data in predict_data])
+true_out_flow = np.array([data.y[1].detach().numpy() for data in predict_data])
+predicted_in_flow = np.array([out.detach().numpy() for out in predict_in_flow])
+predicted_out_flow = np.array([out.detach().numpy() for out in predict_out_flow])
+
+# 计算 MAE 和 RMSE
+mae_in = mean_absolute_error(true_in_flow, predicted_in_flow)
+rmse_in = np.sqrt(mean_squared_error(true_in_flow, predicted_in_flow))
+
+mae_out = mean_absolute_error(true_out_flow, predicted_out_flow)
+rmse_out = np.sqrt(mean_squared_error(true_out_flow, predicted_out_flow))
+
+print(f"MAE for In-Flow: {mae_in}, RMSE for In-Flow: {rmse_in}")
+print(f"MAE for Out-Flow: {mae_out}, RMSE for Out-Flow: {rmse_out}")
