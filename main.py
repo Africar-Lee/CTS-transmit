@@ -101,7 +101,6 @@ for line_name, group in line_for_adj.groupby('线路名'):
 # 提取邻接矩阵
 adj_matrix = nx.adjacency_matrix(G).todense()
 
-
 # 读取csv
 path = 'CTS-2024-dataset/'
 station_csv_file = ['station_20230519.csv',
@@ -112,8 +111,8 @@ station_csv_file = ['station_20230519.csv',
                     'station_20230524.csv',
                     'station_20230525.csv',]
 station_input_csv_select = [0, 1, 2]
-stationList = utility.cstRawCsvData([path + station_csv_file[i] for i in station_input_csv_select])
-station = stationList.getAllStationData()
+# stationList = utility.cstRawCsvData([path + station_csv_file[i] for i in station_input_csv_select])
+station = utility.get_station_for_adj(stop_for_adj, [path + station_csv_file[i] for i in station_input_csv_select])
 station = station2staion_no_line(station) # 合并分布在不同线路上的同一站点数据
 
 total_input_sz = len(station)

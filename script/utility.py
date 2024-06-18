@@ -18,6 +18,54 @@ def  readDateList(dateList: List[str], csvList: List[str]) -> None:
         dateList.append(tmpDate)
     return None
 
+def get_rem_sta_info(origin_df: pd.DataFrame, rem_sta_list: list[str]) -> pd.DataFrame:
+    """ 填补单个csv文件中缺失站点的数据 """
+    date_str = origin_df.loc[0, '日期'] # 日期与文件中其他所有数据保持一致
+    line_str = '' # 线路名不纳入训练，初始化为空字符串
+    outflow = type(origin_df.loc[0, '进站量'])(0)
+    inflow = type(origin_df.loc[0, '进站量'])(0)
+    start_time_enum = list(origin_df['开始时间'].unique())
+    end_time_enum = list(origin_df['结束时间'].unique())
+    time_point_num = len(start_time_enum)
+
+    output_df = pd.DataFrame(columns=origin_df.columns)
+    for time_i in range(time_point_num):
+        for rem_sta_i in range(len(rem_sta_list)):
+            new_row = pd.DataFrame([{'日期':date_str,
+                                     '开始时间':start_time_enum[time_i],
+                                     '结束时间':end_time_enum[time_i],
+                                     '站点名':rem_sta_list[rem_sta_i],
+                                     '线路名':line_str,
+                                     '进站量':inflow,
+                                     '出站量':outflow
+                                     }])
+            output_df = pd.concat([output_df, new_row], ignore_index=True)
+    return output_df
+
+
+def get_station_for_adj(stop_for_adj: pd.DataFrame, csv_list: list[str]) -> pd.DataFrame:
+    """ 输入邻接矩阵中所有的站点名以及要读入的csv文件名列表， 创建station的dataframe """
+    tmp_df = pd.read_csv(csv_list[0])    # 获取列表中首个文件的数据
+
+    # 添加文件数据中缺失的站点数据，目前方案为全部赋值为0
+    remain_staion_list = [] # 缺失的站点名列表
+    for station_name in list(stop_for_adj['站点名']):
+        if not station_name in list(tmp_df['站点名']):
+            remain_staion_list.append(station_name)
+    print('remain_staion_list is ', len(remain_staion_list))
+
+    output_df_list = []
+    for csv_file in csv_list:
+        tmp_ori_df = pd.read_csv(csv_file) # 获取原始数据
+        output_df_list.append(tmp_ori_df)
+        tmp_rem_df = get_rem_sta_info(tmp_ori_df, remain_staion_list) # 填补缺失数据
+        output_df_list.append(tmp_rem_df)
+        print('tmp_rem_df.__len__ is ', len(tmp_rem_df))
+
+    output_df = pd.concat(output_df_list, axis=0, ignore_index=True)
+    print('output_df.__len__ is ', len(output_df))
+    return output_df
+
 class cstRawCsvData:
     def __init__(self, stationCsvLists: List[str] = [], ODCsvLists: List[str] = []) -> None:
         """
