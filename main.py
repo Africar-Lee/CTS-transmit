@@ -210,14 +210,12 @@ train_set_sz = total_input_sz - test_set_sz
 model.train()
 for dup_i in range(duptimes):
     optimizer.zero_grad()  # 清除梯度
-    true_y1_for_loss = data_input[epoch].y[:, 0][station_mask]
-    true_y2_for_loss = data_input[epoch].y[:, 1][station_mask]
-    loss1 = torch.zeros([285])
-    loss2 = torch.zeros([285])
     for epoch in range(train_set_sz):
         out_y = model(data_input[epoch])  # 前向传播
         out_y1_for_loss = out_y[:, 0][station_mask]
         out_y2_for_loss = out_y[:, 1][station_mask]
+        true_y1_for_loss = data_input[epoch].y[:, 0][station_mask]
+        true_y2_for_loss = data_input[epoch].y[:, 1][station_mask]
         loss1 = criterion(out_y1_for_loss, true_y1_for_loss)  # 计算损失
         loss2 = criterion(out_y2_for_loss, true_y2_for_loss)
     loss = loss1 + loss2  # 加权求和
