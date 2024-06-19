@@ -1,5 +1,6 @@
 import torch.nn.functional as F
 from torch.nn import Module
+import torch
 from model import layers
 
 class GCN(Module):
@@ -10,6 +11,10 @@ class GCN(Module):
 
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
+        node_mask = data.node_mask
+
+        if node_mask is not None:
+            x = x[node_mask]
 
         x = self.conv1(x, edge_index)
         x = F.relu(x)
