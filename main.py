@@ -111,8 +111,9 @@ station_csv_file = ['station_20230519.csv',
                     'station_20230524.csv',
                     'station_20230525.csv',]
 station_input_csv_select = range(len(station_csv_file))
+station_csv_sel_list = [path + station_csv_file[i] for i in station_input_csv_select]
 # stationList = utility.cstRawCsvData([path + station_csv_file[i] for i in station_input_csv_select])
-station = utility.get_station_for_adj(stop_for_adj, [path + station_csv_file[i] for i in station_input_csv_select])
+station = utility.get_station_for_adj(stop_for_adj, station_csv_sel_list)
 station = station2staion_no_line(station) # 合并分布在不同线路上的同一站点数据
 
 total_input_sz = len(station)
