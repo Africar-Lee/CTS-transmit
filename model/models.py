@@ -14,7 +14,7 @@ class GCN(Module):
         node_mask = data.node_mask
 
         if node_mask is not None:
-            x = x[node_mask]
+            x = x * node_mask.unsqueeze(-1)
 
         x = self.conv1(x, edge_index)
         x = F.relu(x)
