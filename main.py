@@ -141,7 +141,29 @@ for i in range(len(station)):
 
     sta_info_for_adj.loc[i] = [station_name, abs_date, time_point, day_of_week, is_event, in_flow, out_flow]
 
+
+# 计算掩码
+def get_station_mask(stop_for_adj: pd.DataFrame, csv_list: list[str]) -> torch.Tensor:
+    output_mask = torch.ones(len(stop_for_adj)).tolist()
+    categories_list = list(stop_for_adj['站点名'])
+    rem_stop_list = utility.get_rem_sta_list(stop_for_adj, csv_list)
+    for stop_i in range(len(categories_list)):
+        if categories_list[stop_i] in rem_stop_list:
+            output_mask[stop_i] = False
+
+    for i in range(len(output_mask)):
+        if output_mask[i]:
+            output_mask[i] = True
+
+    return torch.tensor(output_mask)
+
+station_mask = get_station_mask(stop_for_adj, station_csv_sel_list)
+
+
+from sklearn.preprocessing import StandardScaler
+
 categories_list = list(stop_for_adj['站点名'])
+scaler = StandardScaler()
 my_x = []
 my_y = []
 for i in sta_info_for_adj.groupby(["abs_date","time_point"]):
@@ -150,11 +172,13 @@ for i in sta_info_for_adj.groupby(["abs_date","time_point"]):
     temp = temp.sort_values(by=['station_name']).reset_index(drop=True)#特定日期特定时间的所有站点已知数据
     features = temp[['abs_date','time_point','day_of_week','is_event']].values
     labels = temp[['in_flow','out_flow']].values
+    features = scaler.fit_transform(features)
     my_x.append(features)
     my_y.append(labels)
 
 my_x = np.array(my_x)
 my_y = np.array(my_y)
+
 
 
 # 准备模型输入与loss标杆
@@ -166,7 +190,8 @@ row, col = np.nonzero(adj_matrix)
 edge_index = torch.tensor(np.array([row, col]), dtype=torch.long)
 data_input: List[Data] = [Data(x=torch.tensor(my_x[epoch], dtype=torch.float),
                                edge_index=edge_index,
-                               y=torch.tensor(my_y[epoch], dtype=torch.float))
+                               y=torch.tensor(my_y[epoch], dtype=torch.float),
+                               node_mask=station_mask)
                           for epoch in range(len(my_x))]
 
 
@@ -178,16 +203,26 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 criterion = torch.nn.MSELoss()
 
 # start training
-duptimes = 20 # 暂定每个数据输入进模型训2次
+duptimes = 200 # 每个数据输入进模型训练的次数
 total_input_sz = len(data_input)
 test_set_sz = 48 # 预测集大小
 train_set_sz = total_input_sz - test_set_sz
-for epoch in range(duptimes * train_set_sz):
+model.train()
+for dup_i in range(duptimes):
     optimizer.zero_grad()  # 清除梯度
-    out_y = model(data_input[epoch % train_set_sz])  # 前向传播
-    loss1 = criterion(out_y[0], data_input[epoch % train_set_sz].y[0])  # 计算损失
-    loss2 = criterion(out_y[1], data_input[epoch % train_set_sz].y[1])
+    true_y1_for_loss = data_input[epoch].y[:, 0][station_mask]
+    true_y2_for_loss = data_input[epoch].y[:, 1][station_mask]
+    loss1 = torch.zeros([285])
+    loss2 = torch.zeros([285])
+    for epoch in range(train_set_sz):
+        out_y = model(data_input[epoch])  # 前向传播
+        out_y1_for_loss = out_y[:, 0][station_mask]
+        out_y2_for_loss = out_y[:, 1][station_mask]
+        loss1 = criterion(out_y1_for_loss, true_y1_for_loss)  # 计算损失
+        loss2 = criterion(out_y2_for_loss, true_y2_for_loss)
     loss = loss1 + loss2  # 加权求和
+    if dup_i % (duptimes / 20) == 0:
+        print('dup_i=', dup_i, '\t\tloss=', loss.item())
     loss.backward()  # 反向传播
     optimizer.step()  # 更新参数
 
@@ -199,15 +234,15 @@ predict_in_flow = []
 predict_out_flow = []
 for piece in predict_data:
     pre_out = model(piece)
-    predict_in_flow.append(pre_out[:, 0])
-    predict_out_flow.append(pre_out[:, 1])
+    predict_in_flow.append(pre_out[:, 0][station_mask])
+    predict_out_flow.append(pre_out[:, 1][station_mask])
 
 # 按照GPT建议简单写了下性能评估
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 # 将预测值和真实值转换为 numpy 数组以便使用 sklearn 库计算评估指标
-true_in_flow = np.array([data.y[:, 0].detach().numpy() for data in predict_data])
-true_out_flow = np.array([data.y[:, 1].detach().numpy() for data in predict_data])
+true_in_flow = np.array([data.y[:, 0][station_mask].detach().numpy() for data in predict_data])
+true_out_flow = np.array([data.y[:, 1][station_mask].detach().numpy() for data in predict_data])
 predicted_in_flow = np.array([out.detach().numpy() for out in predict_in_flow])
 predicted_out_flow = np.array([out.detach().numpy() for out in predict_out_flow])
 
